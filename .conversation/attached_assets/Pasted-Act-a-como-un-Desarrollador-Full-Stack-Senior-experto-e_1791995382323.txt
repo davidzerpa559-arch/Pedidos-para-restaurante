@@ -1,0 +1,94 @@
+Actúa como un Desarrollador Full-Stack Senior experto en Node.js, Express, SQLite y TailwindCSS. 
+Quiero que construyas una Aplicación Web App completa, profesional, responsive (Mobile-First para Android e iOS) y de alto rendimiento para un restaurante en Puerto Cabello, Venezuela.
+
+### 🛠️ STACK TÉCNICO Y REGLAS OBLIGATORIAS:
+1. Backend: Node.js con Express.js.
+2. Base de Datos: SQLite (usando sqlite3 o better-sqlite3) local, guardada en un archivo `database.sqlite`. NO uses Firebase ni bases de datos externas de pago.
+3. Hosting objetivo: Preparado para desplegarse gratis en Render o Replit (debe escuchar en `process.env.PORT || 3000`).
+4. Seguridad: PIN de administrador configurable mediante Variable de Entorno (`process.env.ADMIN_PIN || "1234"`). Sesiones seguras con express-session o JWT en cookies HTTP-only.
+
+---
+
+### 📱 1. INTERFAZ PÚBLICA DE CLIENTE (Estilo Instagram Feed):
+- Apariencia / UI: La página principal debe simular el feed de Instagram.
+  - Cada plato del menú es una "Publicación/Post" vertical con:
+    - Encabezado con foto de perfil/logo del negocio y nombre del plato.
+    - Foto del plato en alta calidad (soporte para imágenes cuadradas/1:1 o 4:5).
+    - Botón de "Me Gusta" ❤️ interactivo (público, se puede dar Like sin registro). Contador de Likes en tiempo real.
+    - Botón de "Compartir" 📤 (copia el enlace o abre WhatsApp con el enlace del plato).
+    - Descripción del plato escrita estilo "caption" de Instagram con etiquetas y precio.
+    - Si el producto tiene oferta/descuento, mostrar el precio anterior tachado y el precio de oferta en rojo o verde destacado.
+    - Sección de Comentarios/Reseñas debajo de la foto. (REGLA: Solo los clientes con pedidos confirmados/comprados pueden comentar. Los visitantes normales solo leen).
+    - Botón prominente: "🛒 Añadir al Pedido".
+- Banner de Estado del Local:
+  - En la parte superior, mostrar si el local está "🟢 ABIERTO" o "🔴 CERRADO", junto con el horario de atención.
+  - Si el local está CERRADO, bloquear el botón de compra y mostrar un aviso informativo.
+- Carrito Flotante:
+  - Botón flotante inferior con contador de ítems y total en USD / Bs.
+
+---
+
+### 🛒 2. LOGISTICA Y FORMULARIO DE CHECKOUT (Sin Login / Rápido):
+Al presionar "Procesar Pedido", se abre un modal/pantalla con:
+- Resumen del Pedido (Ítems, cantidades, total).
+- Formulario de Datos del Cliente (TODOS LOS CAMPOS OBLIGATORIOS):
+  1. Nombre y Apellido.
+  2. Cédula de Identidad (V- / E-).
+  3. Número de Teléfono (WhatsApp).
+  4. Dirección Exacta de Entrega / Delivery.
+  5. Últimos 6 DÍGITOS de la Referencia del Pago Móvil.
+- Módulo de Pago Móvil: Muestra los datos actualizados del negocio (Banco, Cédula/RIF, Teléfono).
+- Botón "Confirmar y Enviar Pedido":
+  - Guarda el pedido en la base de datos en estado `PENDIENTE`.
+  - Muestra una pantalla de seguimiento con estado en tiempo real (*"Esperando verificación de Pago Móvil..."*).
+  - Incluye un botón para enviar el resumen del pedido al WhatsApp del negocio.
+
+---
+
+### 🤖 3. WEBHOOK DE AUTOMATIZACIÓN DE PAGO (MacroDroid / BDV):
+- Crea una ruta HTTP POST secreta: `/api/webhooks/pago-movil?token=SECRETO_MACRODROID`
+- Cuando MacroDroid envíe la notificación bancaria con la referencia de 6 dígitos:
+  1. El servidor buscará el pedido en estado `PENDIENTE` cuya referencia coincida con los 6 dígitos.
+  2. Cambiará automáticamente el estado del pedido a `APROBADO`.
+  3. Emitirá una actualización mediante Server-Sent Events (SSE) o WebSockets (o polling) para que la pantalla del cliente cambie instantáneamente a *"¡Pago Confirmado! Su pedido está en cocina 🍕"*.
+
+---
+
+### 🔐 4. PANEL DE CONTROL DEL DUEÑO / ADMIN (`/admin`):
+Protegido estrictamente por el PIN secreto. Incluye:
+
+A. Dashboard de Métricas y Ventas (Analítica):
+- Total de Pedidos y Ganancias del Día.
+- Total de Pedidos y Ganancias de la Semana.
+- Total de Pedidos y Ganancias del Mes.
+- Contador de pedidos por estado: Pendientes, Aprobados, En Cocina, Entregados.
+
+B. Control del Local:
+- Interruptor General: Cambiar estado del local (ABIERTO / CERRADO).
+- Configuración de Horario de Atención.
+
+C. Gestión de Menú (CRUD Completo de Productos):
+- Crear, Editar y Eliminar productos.
+- Campos: Nombre, Descripción, Categoría, Precio Normal, Precio de Oferta (opcional), URL de Foto.
+- Control de Stock: Interruptor (Disponible / AGOTADO).
+
+D. Configuración del Negocio:
+- Editar Nombre del Negocio y URL del Logo.
+- Editar Datos de Pago Móvil (Banco, Cédula/RIF, Teléfono).
+- Editar WhatsApp del Local, RIF y Dirección Física.
+
+E. Monitoreo de Pedidos en Tiempo Real:
+- Lista de pedidos entrantes con actualización automática.
+- Opción para cambiar estado manualmente (Aprobado, En preparación, Despachado, Cancelado).
+
+---
+
+### 🗄️ 5. ESTRUCTURA DE LA BASE DE DATOS (SQLite):
+Crea las tablas automáticamente al iniciar la app:
+- `configuracion`: (id, nombre_negocio, logo_url, rif, direccion, telefono_ws, banco, cedula_pago, telefono_pago, estado_local, horario, webhook_token).
+- `productos`: (id, nombre, descripcion, categoria, precio, precio_oferta, foto_url, disponible, likes_count, fecha_creacion).
+- `pedidos`: (id, cliente_nombre, cliente_cedula, cliente_telefono, cliente_direccion, items_json, total_usd, referencia_6_digitos, estado, fecha_creacion).
+- `resenas`: (id, producto_id, pedido_id, cliente_nombre, comentario, calificacion, fecha).
+- `likes`: (id, producto_id, ip_visitante).
+
+Por favor, genera toda la estructura del proyecto, servidor Express, modelos de base de datos, rutas de API, vistas y CSS para que la aplicación funcione al 100% desde el primer intento.

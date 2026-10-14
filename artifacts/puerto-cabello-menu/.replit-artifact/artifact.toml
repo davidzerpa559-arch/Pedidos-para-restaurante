@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Sazón del Puerto"
+description = "Una web móvil para que los clientes descubran el menú, hagan pedidos y sigan la verificación de pago; incluye gestión de ventas, productos y configuración para el restaurante en Puerto Cabello."
+version = "1.0.0"
+id = "artifacts/puerto-cabello-menu"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19381
+
+[services.development]
+run = "pnpm --filter @workspace/puerto-cabello-menu run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/puerto-cabello-menu", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/puerto-cabello-menu/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19381"
+BASE_PATH = "/"

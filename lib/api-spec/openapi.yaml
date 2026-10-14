@@ -3,13 +3,21 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Public restaurant ordering, payment verification, and administration API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: store
+    description: Public menu and restaurant configuration
+  - name: orders
+    description: Customer orders, tracking, and verified reviews
+  - name: admin
+    description: PIN-protected restaurant administration
+  - name: payments
+    description: Mobile-payment webhook
 paths:
   /healthz:
     get:
@@ -24,6 +32,322 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /store:
+    get:
+      operationId: getStore
+      tags: [store]
+      summary: Get public restaurant details and open status
+      responses:
+        "200":
+          description: Restaurant details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Store"
+  /products:
+    get:
+      operationId: listProducts
+      tags: [store]
+      summary: List available menu products
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Menu products
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Product" }
+  /products/{id}/reviews:
+    get:
+      operationId: listProductReviews
+      tags: [store]
+      summary: List verified reviews for a product
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Verified customer reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Review" }
+  /products/{id}/like:
+    post:
+      operationId: toggleProductLike
+      tags: [store]
+      summary: Toggle a like for a product from this visitor
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LikeInput" }
+      responses:
+        "200":
+          description: Updated like count
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LikeResult" }
+  /orders:
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Place an order for delivery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderInput" }
+      responses:
+        "201":
+          description: Order created and ready for payment verification
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderCreated" }
+        "400": { description: Invalid order details }
+        "409": { description: Store is closed or payment settings are incomplete }
+  /orders/{id}/status:
+    get:
+      operationId: getTrackedOrderStatus
+      tags: [orders]
+      summary: Get order status using its private tracking token
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: token, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Current order status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderStatus" }
+        "404": { description: Order not found }
+  /orders/{id}/reviews:
+    post:
+      operationId: createOrderReview
+      tags: [orders]
+      summary: Leave a review for an item in an approved order
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewInput" }
+      responses:
+        "201":
+          description: Review saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Review" }
+        "403": { description: Only customers with an approved order can review }
+  /webhooks/pago-movil:
+    post:
+      operationId: receiveMobilePayment
+      tags: [payments]
+      summary: Verify a pending order from a bank notification
+      parameters:
+        - name: token
+          in: query
+          required: false
+          description: Prefer the x-webhook-token header to avoid exposing the secret in access logs.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentNotificationInput" }
+      responses:
+        "200":
+          description: Matching order approved, or no matching pending order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentNotificationResult" }
+        "401": { description: Invalid webhook token }
+  /admin/session:
+    get:
+      operationId: getAdminSession
+      tags: [admin]
+      summary: Check whether the current browser has an admin session
+      responses:
+        "200":
+          description: Session status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSession" }
+    post:
+      operationId: createAdminSession
+      tags: [admin]
+      summary: Sign in using the configured admin PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminLoginInput" }
+      responses:
+        "200":
+          description: Admin session created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSession" }
+        "401": { description: Invalid PIN }
+    delete:
+      operationId: endAdminSession
+      tags: [admin]
+      summary: Sign out the admin session
+      responses:
+        "200":
+          description: Admin session cleared
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResult" }
+  /admin/dashboard:
+    get:
+      operationId: getAdminDashboard
+      tags: [admin]
+      summary: Get day, week, and month sales metrics
+      responses:
+        "200":
+          description: Sales metrics and status counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dashboard" }
+        "401": { description: Admin session required }
+  /admin/orders:
+    get:
+      operationId: listAdminOrders
+      tags: [admin]
+      summary: List recent orders
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Recent orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminOrder" }
+        "401": { description: Admin session required }
+  /admin/orders/{id}/status:
+    patch:
+      operationId: updateOrderStatus
+      tags: [admin]
+      summary: Change the status of an order
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderStatusInput" }
+      responses:
+        "200":
+          description: Updated order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOrder" }
+        "401": { description: Admin session required }
+  /admin/products:
+    get:
+      operationId: listAdminProducts
+      tags: [admin]
+      summary: List all products, including unavailable items
+      responses:
+        "200":
+          description: All products
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Product" }
+        "401": { description: Admin session required }
+    post:
+      operationId: createProduct
+      tags: [admin]
+      summary: Add a menu product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "201":
+          description: Product created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "401": { description: Admin session required }
+  /admin/products/{id}:
+    patch:
+      operationId: updateProduct
+      tags: [admin]
+      summary: Edit a menu product
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductUpdate" }
+      responses:
+        "200":
+          description: Product updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "401": { description: Admin session required }
+    delete:
+      operationId: deleteProduct
+      tags: [admin]
+      summary: Remove a menu product
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Product removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessResult" }
+        "401": { description: Admin session required }
+  /admin/store:
+    get:
+      operationId: getAdminStore
+      tags: [admin]
+      summary: Get editable restaurant configuration
+      responses:
+        "200":
+          description: Editable restaurant settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        "401": { description: Admin session required }
+    put:
+      operationId: updateAdminStore
+      tags: [admin]
+      summary: Update restaurant details, hours, exchange rate, and mobile payment information
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StoreUpdate" }
+      responses:
+        "200":
+          description: Restaurant settings updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Store" }
+        "401": { description: Admin session required }
 components:
   schemas:
     HealthStatus:
@@ -33,4 +357,226 @@ components:
           type: string
       required:
         - status
+    SuccessResult:
+      type: object
+      properties:
+        success: { type: boolean }
+      required: [success]
+    Product:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        category: { type: string }
+        price: { type: number }
+        offerPrice: { type: ["number", "null"] }
+        photoUrl: { type: string }
+        available: { type: boolean }
+        likesCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, description, category, price, offerPrice, photoUrl, available, likesCount, createdAt]
+    ProductInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 2000 }
+        category: { type: string, minLength: 1, maxLength: 80 }
+        price: { type: number, exclusiveMinimum: 0 }
+        offerPrice: { type: ["number", "null"], exclusiveMinimum: 0 }
+        photoUrl: { type: string, format: uri }
+        available: { type: boolean }
+      required: [name, description, category, price, photoUrl, available]
+    ProductUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 2000 }
+        category: { type: string, minLength: 1, maxLength: 80 }
+        price: { type: number, exclusiveMinimum: 0 }
+        offerPrice: { type: ["number", "null"], exclusiveMinimum: 0 }
+        photoUrl: { type: string, format: uri }
+        available: { type: boolean }
+      minProperties: 1
+    LikeInput:
+      type: object
+      properties:
+        visitorId: { type: string, minLength: 16, maxLength: 80 }
+      required: [visitorId]
+    LikeResult:
+      type: object
+      properties:
+        liked: { type: boolean }
+        likesCount: { type: integer }
+      required: [liked, likesCount]
+    Store:
+      type: object
+      properties:
+        name: { type: string }
+        logoUrl: { type: string }
+        rif: { type: string }
+        address: { type: string }
+        whatsapp: { type: string }
+        bank: { type: string }
+        paymentId: { type: string }
+        paymentPhone: { type: string }
+        exchangeRate: { type: number }
+        isOpen: { type: boolean }
+        manualOpen: { type: boolean }
+        hours: { type: string }
+        schedule: { type: string }
+        paymentConfigured: { type: boolean }
+      required: [name, logoUrl, rif, address, whatsapp, bank, paymentId, paymentPhone, exchangeRate, isOpen, manualOpen, hours, schedule, paymentConfigured]
+    StoreUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        logoUrl: { type: string }
+        rif: { type: string }
+        address: { type: string }
+        whatsapp: { type: string }
+        bank: { type: string }
+        paymentId: { type: string }
+        paymentPhone: { type: string }
+        exchangeRate: { type: number, exclusiveMinimum: 0 }
+        manualOpen: { type: boolean }
+        schedule: { type: string }
+      required: [name, logoUrl, rif, address, whatsapp, bank, paymentId, paymentPhone, exchangeRate, manualOpen, schedule]
+    OrderItemInput:
+      type: object
+      properties:
+        productId: { type: integer }
+        quantity: { type: integer, minimum: 1, maximum: 20 }
+      required: [productId, quantity]
+    OrderInput:
+      type: object
+      properties:
+        customerName: { type: string, minLength: 2, maxLength: 120 }
+        customerId: { type: string, minLength: 6, maxLength: 12, pattern: "^[VEve]-?[0-9]{5,10}$" }
+        phone: { type: string, minLength: 7, maxLength: 24 }
+        address: { type: string, minLength: 8, maxLength: 1000 }
+        paymentReference: { type: string, pattern: "^[0-9]{6}$" }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items: { $ref: "#/components/schemas/OrderItemInput" }
+      required: [customerName, customerId, phone, address, paymentReference, items]
+    OrderLine:
+      type: object
+      properties:
+        productId: { type: integer }
+        name: { type: string }
+        quantity: { type: integer }
+        unitPrice: { type: number }
+        lineTotal: { type: number }
+      required: [productId, name, quantity, unitPrice, lineTotal]
+    OrderCreated:
+      type: object
+      properties:
+        id: { type: integer }
+        trackingToken: { type: string }
+        status: { type: string }
+        totalUsd: { type: number }
+        totalBs: { type: number }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrderLine" }
+        createdAt: { type: string, format: date-time }
+      required: [id, trackingToken, status, totalUsd, totalBs, items, createdAt]
+    OrderStatus:
+      type: object
+      properties:
+        id: { type: integer }
+        status: { type: string }
+        totalUsd: { type: number }
+        totalBs: { type: number }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrderLine" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, status, totalUsd, totalBs, items, createdAt, updatedAt]
+    AdminOrder:
+      allOf:
+        - $ref: "#/components/schemas/OrderStatus"
+        - type: object
+          properties:
+            customerName: { type: string }
+            customerId: { type: string }
+            phone: { type: string }
+            address: { type: string }
+            paymentReference: { type: string }
+          required: [customerName, customerId, phone, address, paymentReference]
+    OrderStatusInput:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [PENDIENTE, APROBADO, EN_PREPARACION, DESPACHADO, ENTREGADO, CANCELADO]
+      required: [status]
+    AdminLoginInput:
+      type: object
+      properties:
+        pin: { type: string, minLength: 4, maxLength: 80 }
+      required: [pin]
+    AdminSession:
+      type: object
+      properties:
+        authenticated: { type: boolean }
+      required: [authenticated]
+    ReviewInput:
+      type: object
+      properties:
+        trackingToken: { type: string, minLength: 16 }
+        productId: { type: integer }
+        comment: { type: string, minLength: 1, maxLength: 1000 }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+      required: [trackingToken, productId, comment, rating]
+    Review:
+      type: object
+      properties:
+        id: { type: integer }
+        productId: { type: integer }
+        customerName: { type: string }
+        comment: { type: string }
+        rating: { type: integer }
+        createdAt: { type: string, format: date-time }
+      required: [id, productId, customerName, comment, rating, createdAt]
+    PaymentNotificationInput:
+      type: object
+      properties:
+        reference: { type: string }
+        message: { type: string }
+      required: [reference]
+    PaymentNotificationResult:
+      type: object
+      properties:
+        matched: { type: boolean }
+        orderId: { type: ["integer", "null"] }
+        status: { type: ["string", "null"] }
+      required: [matched, orderId, status]
+    PeriodMetrics:
+      type: object
+      properties:
+        orders: { type: integer }
+        revenueUsd: { type: number }
+      required: [orders, revenueUsd]
+    Dashboard:
+      type: object
+      properties:
+        today: { $ref: "#/components/schemas/PeriodMetrics" }
+        week: { $ref: "#/components/schemas/PeriodMetrics" }
+        month: { $ref: "#/components/schemas/PeriodMetrics" }
+        statusCounts:
+          type: object
+          properties:
+            pending: { type: integer }
+            approved: { type: integer }
+            preparing: { type: integer }
+            dispatched: { type: integer }
+            delivered: { type: integer }
+            cancelled: { type: integer }
+          required: [pending, approved, preparing, dispatched, delivered, cancelled]
+      required: [today, week, month, statusCounts]
 
